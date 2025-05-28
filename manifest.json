@@ -1,10 +1,13 @@
 {
     "manifest_version": 3,
-    "name": "Active Tab URL Logger",
+    "name": "Website Activity Logger",
     "version": "1.0",
-    "description": "Logs the hostname of the active tab's URL to the console.",
+    "description": "Logs website visits and sends data to an API.",
     "permissions": [
-      "tabs"
+      "tabs",
+      "storage",
+      "alarms",
+      "activeTab"
     ],
     "host_permissions": [
       "https://uez62rtr20.execute-api.us-east-1.amazonaws.com/"
@@ -13,6 +16,11 @@
       "service_worker": "background.js"
     },
     "action": {
-      "default_popup": "popup.html"
+      "default_popup": "popup.html",
+      "default_icon": {
+        "16": "hello_extensions.png",
+        "48": "hello_extensions.png",
+        "128": "hello_extensions.png"
+      }
     }
 }

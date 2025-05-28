@@ -1,47 +1,36 @@
 console.log('This is a popup for real!');
+console.log('Popup script loaded.');
 
 document.addEventListener('DOMContentLoaded', () => {
   const sendButton = document.getElementById('sendApiRequestBtn');
+  const statusMessage = document.getElementById('statusMessage'); // Assuming you add an element to show status
 
   if (sendButton) {
     sendButton.addEventListener('click', () => {
-      const apiUrl = 'https://uez62rtr20.execute-api.us-east-1.amazonaws.com/prod/users/premelon/entries';
-      const requestBody = {
-        username: "premelon",
-        eventName: "phoneUse", 
-        data: "output" // As per your instruction, using the string "output" for now
-      };
+      console.log('Force send data button clicked.');
+      if (statusMessage) statusMessage.textContent = 'Attempting to send data...';
 
-      console.log('Sending API request to??:', apiUrl);
-      console.log('Request body:', requestBody);
-
-      fetch(apiUrl, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          // Add any other headers if required, like Authorization headers
-        },
-        body: JSON.stringify(requestBody)
-      })
-      .then(response => {
-        if (!response.ok) {
-          // If response is not OK, throw an error to be caught by the .catch block
-          return response.text().then(text => { 
-            throw new Error(`API request failed with status ${response.status}: ${text}`); 
-          });
+      // Send a message to the background script to trigger data sending
+      chrome.runtime.sendMessage({ action: "forceSendData" }, (response) => {
+        if (chrome.runtime.lastError) {
+          // Handle errors from sendMessage, e.g., if the background script isn't ready
+          console.error('Error sending message to background script:', chrome.runtime.lastError.message);
+          if (statusMessage) statusMessage.textContent = `Error: ${chrome.runtime.lastError.message}`;
+          return;
         }
-        return response.json(); // Or response.text() if the response is not JSON
-      })
-      .then(data => {
-        console.log('API request successful:', data);
-        // You can add any further actions here, like showing a success message in the popup
-      })
-      .catch(error => {
-        console.error('Error sending API request:', error);
-        // You can display an error message in the popup here
+        
+        if (response) {
+          console.log('Response from background script:', response.status);
+          if (statusMessage) statusMessage.textContent = `Status: ${response.status}`;
+        } else {
+          // This might happen if the background script doesn't send a response or closes the port before responding.
+          console.warn('No response from background script or an issue occurred.');
+          if (statusMessage) statusMessage.textContent = 'No response or issue with background script.';
+        }
       });
     });
   } else {
     console.error('Button with ID sendApiRequestBtn not found.');
+    if (statusMessage) statusMessage.textContent = 'Error: Send button not found.';
   }
 });

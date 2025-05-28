@@ -1,11 +1,16 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>Active Tab Logger</title>
-  <script src="popup.js" defer></script>
+  <title>Website Logger</title>
+  <script src="popup.js"></script>
+  <style>
+    body { font-family: sans-serif; width: 200px; padding: 10px; }
+    button { width: 100%; padding: 8px; margin-bottom: 10px; }
+    #statusMessage { font-size: 0.9em; color: #333; }
+  </style>
 </head>
 <body>
-  <p>Active tab URLs are being logged to the console (from background.js).</p>
-  <button id="sendApiRequestBtn">Send API Request</button>
+  <button id="sendApiRequestBtn">Force Send Data</button>
+  <div id="statusMessage"></div>
 </body>
 </html> 
