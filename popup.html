@@ -4,13 +4,25 @@
   <title>Website Logger</title>
   <script src="popup.js"></script>
   <style>
-    body { font-family: sans-serif; width: 200px; padding: 10px; }
+    body { font-family: sans-serif; width: 250px; padding: 10px; font-size: 14px; }
     button { width: 100%; padding: 8px; margin-bottom: 10px; }
-    #statusMessage { font-size: 0.9em; color: #333; }
+    #statusMessage { font-size: 0.9em; color: #333; margin-bottom: 10px;}
+    h3 { margin-top: 15px; margin-bottom: 5px; font-size: 1.1em; }
+    #logSummaryTotal, #logSummaryBreakdown { font-size: 0.95em; margin-bottom: 10px;}
+    #logSummaryBreakdown ul { list-style-type: none; padding-left: 0; margin-top: 5px; }
+    #logSummaryBreakdown li { margin-bottom: 3px; }
   </style>
 </head>
 <body>
   <button id="sendApiRequestBtn">Force Send Data</button>
   <div id="statusMessage"></div>
+
+  <h3>Log Summary</h3>
+  <div id="logSummaryTotal">Loading summary...</div>
+  <div id="logSummaryBreakdown">
+    <h4>Visits per site:</h4>
+    <ul></ul>
+  </div>
+
 </body>
 </html> 
