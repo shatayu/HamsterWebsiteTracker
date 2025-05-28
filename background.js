@@ -38,23 +38,31 @@ function isSameUTCDay(ts1, ts2) {
 
 /**
  * Records a website visit to local storage.
- * @param {string} url - The URL of the visited website.
+ * @param {string} fullUrl - The full URL of the visited website.
  */
-async function recordWebsiteVisit(url) {
-  const logEntry = {
-    url: url,
-    timestampRFC2822: getRFC2822Timestamp(),
-    loggedAtMS: Date.now() // For internal sorting and time comparisons
-  };
-
+async function recordWebsiteVisit(fullUrl) {
   try {
+    const parsedUrl = new URL(fullUrl);
+    let hostname = parsedUrl.hostname;
+
+    // Remove "www." if it exists
+    if (hostname.startsWith('www.')) {
+      hostname = hostname.substring(4);
+    }
+
+    const logEntry = {
+      processedHostname: hostname, // Store the processed hostname
+      timestampRFC2822: getRFC2822Timestamp(),
+      loggedAtMS: Date.now()
+    };
+
     const data = await chrome.storage.local.get(LOGS_STORAGE_KEY);
     const logs = data[LOGS_STORAGE_KEY] || [];
     logs.push(logEntry);
     await chrome.storage.local.set({ [LOGS_STORAGE_KEY]: logs });
-    console.log('Website logged:', logEntry.url, '@', logEntry.timestampRFC2822);
+    console.log('Website logged:', logEntry.processedHostname, '@', logEntry.timestampRFC2822);
   } catch (error) {
-    console.error('Error recording website visit:', error);
+    console.error('Error recording website visit for URL:', fullUrl, error);
   }
 }
 
@@ -66,7 +74,7 @@ async function recordWebsiteVisit(url) {
 function compileLogData(logs) {
   if (!logs || logs.length === 0) return "";
   return logs
-    .map(log => `opening ${log.url} at ${log.timestampRFC2822}`)
+    .map(log => `opening ${log.processedHostname} at ${log.timestampRFC2822}`) // Use processedHostname
     .join('\n')
     .trim();
 }
@@ -181,7 +189,7 @@ async function checkAndProcessLogs(isForced = false) {
 chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
   if (changeInfo.status === 'complete' && tab.url && (tab.url.startsWith('http:') || tab.url.startsWith('https:'))) {
     console.log('Tab updated and complete:', tab.url);
-    recordWebsiteVisit(tab.url);
+    recordWebsiteVisit(tab.url); // Pass the full tab.url here
   }
 });
 
@@ -190,7 +198,7 @@ chrome.tabs.onActivated.addListener(async (activeInfo) => {
     const tab = await chrome.tabs.get(activeInfo.tabId);
     if (tab && tab.url && (tab.url.startsWith('http:') || tab.url.startsWith('https:'))) {
       console.log('Tab activated:', tab.url);
-      recordWebsiteVisit(tab.url);
+      recordWebsiteVisit(tab.url); // Pass the full tab.url here
     }
   } catch (error) {
     // The tab might be closed before we can get it, or it might be a special tab without a URL
