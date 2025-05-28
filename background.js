@@ -180,11 +180,25 @@ async function checkAndProcessLogs(isForced = false) {
 
 chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
   if (changeInfo.status === 'complete' && tab.url && (tab.url.startsWith('http:') || tab.url.startsWith('https:'))) {
+    console.log('Tab updated and complete:', tab.url);
     recordWebsiteVisit(tab.url);
-    // Optional: checkAndProcessLogs() here if you want to send immediately after logging
-    // if conditions are met, instead of waiting for the alarm.
-    // However, this could lead to many checks if user browses rapidly.
-    // The alarm provides a more batched approach.
+  }
+});
+
+chrome.tabs.onActivated.addListener(async (activeInfo) => {
+  try {
+    const tab = await chrome.tabs.get(activeInfo.tabId);
+    if (tab && tab.url && (tab.url.startsWith('http:') || tab.url.startsWith('https:'))) {
+      console.log('Tab activated:', tab.url);
+      recordWebsiteVisit(tab.url);
+    }
+  } catch (error) {
+    // The tab might be closed before we can get it, or it might be a special tab without a URL
+    if (error.message.includes('No tab with id') || error.message.includes('cannot be scripted')) {
+      // console.warn(`Could not get tab info for tabId ${activeInfo.tabId}: ${error.message}`);
+    } else {
+      console.error('Error in onActivated listener:', error);
+    }
   }
 });
 
