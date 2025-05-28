@@ -1,0 +1,18 @@
+{
+    "manifest_version": 3,
+    "name": "Active Tab URL Logger",
+    "version": "1.0",
+    "description": "Logs the hostname of the active tab's URL to the console.",
+    "permissions": [
+      "tabs"
+    ],
+    "host_permissions": [
+      "https://uez62rtr20.execute-api.us-east-1.amazonaws.com/"
+    ],
+    "background": {
+      "service_worker": "background.js"
+    },
+    "action": {
+      "default_popup": "popup.html"
+    }
+}
