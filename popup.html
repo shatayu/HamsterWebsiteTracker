@@ -4,13 +4,31 @@
   <title>Website Logger</title>
   <script src="popup.js"></script>
   <style>
-    body { font-family: sans-serif; width: 250px; padding: 10px; font-size: 14px; }
-    button { width: 100%; padding: 8px; margin-bottom: 10px; }
+    body { font-family: sans-serif; width: 280px; padding: 10px; font-size: 14px; }
+    button { width: 100%; padding: 8px; margin-bottom: 10px; cursor: pointer; }
+    .settings-toggle-btn { background-color: #f0f0f0; border: 1px solid #ccc; }
     #statusMessage { font-size: 0.9em; color: #333; margin-bottom: 10px;}
     h3 { margin-top: 15px; margin-bottom: 5px; font-size: 1.1em; }
     #logSummaryTotal, #logSummaryBreakdown { font-size: 0.95em; margin-bottom: 10px;}
     #logSummaryBreakdown ul { list-style-type: none; padding-left: 0; margin-top: 5px; }
     #logSummaryBreakdown li { margin-bottom: 3px; }
+    .settings-section { border-top: 1px solid #ccc; margin-top: 15px; padding-top: 10px; display: none; }
+    .settings-section label {
+      display: block;
+      margin-bottom: 5px;
+      font-weight: bold;
+    }
+    .settings-section input[type="checkbox"] { margin-right: 5px; vertical-align: middle; }
+    .settings-section textarea {
+      width: 95%;
+      min-height: 60px;
+      padding: 5px;
+      margin-bottom: 10px;
+      border: 1px solid #ccc;
+      font-family: monospace;
+      font-size: 12px;
+    }
+    .settings-section .save-settings-btn { background-color: #4CAF50; color: white; border: none; }
   </style>
 </head>
 <body>
@@ -22,6 +40,23 @@
   <div id="logSummaryBreakdown">
     <h4>Visits per site:</h4>
     <ul></ul>
+  </div>
+
+  <button id="toggleSettingsBtn" class="settings-toggle-btn">Show Settings</button>
+
+  <div class="settings-section" id="settingsSection">
+    <h4>Settings</h4>
+    <div>
+      <label for="enableAllowlistMode">
+        <input type="checkbox" id="enableAllowlistMode"> Enable Allowlist Mode
+      </label>
+    </div>
+    <div>
+      <label for="allowlistDomains">Allowlisted Domains (one per line):</label>
+      <textarea id="allowlistDomains" placeholder="e.g., google.com\nx.com\ntheatlantic.com"></textarea>
+    </div>
+    <button id="saveSettingsBtn" class="save-settings-btn">Save Settings</button>
+    <div id="settingsStatusMessage" style="font-size:0.85em; margin-top:5px;"></div>
   </div>
 
 </body>

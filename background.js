@@ -4,6 +4,8 @@ const LAST_SENT_TIMESTAMP_KEY = 'websiteTrackerLastSent';
 const API_ENDPOINT = 'https://uez62rtr20.execute-api.us-east-1.amazonaws.com/prod/users/premelon/entries';
 const TWENTY_FOUR_HOURS_MS = 24 * 60 * 60 * 1000;
 const SEND_DATA_ALARM_NAME = 'sendDataAlarm';
+const ALLOWLIST_MODE_KEY = 'allowlistModeEnabled';
+const ALLOWLIST_DOMAINS_KEY = 'allowlistDomains';
 
 // --- Helper Functions ---
 
@@ -37,17 +39,29 @@ function isSameUTCDay(ts1, ts2) {
 // --- Core Logic Functions ---
 
 /**
- * Records a website visit to local storage.
+ * Records a website visit to local storage, respecting allowlist settings.
  * @param {string} fullUrl - The full URL of the visited website.
  */
 async function recordWebsiteVisit(fullUrl) {
   try {
+    const settings = await chrome.storage.local.get([ALLOWLIST_MODE_KEY, ALLOWLIST_DOMAINS_KEY]);
+    const allowlistModeEnabled = !!settings[ALLOWLIST_MODE_KEY];
+    const allowlistedDomains = settings[ALLOWLIST_DOMAINS_KEY] || [];
+
     const parsedUrl = new URL(fullUrl);
     let hostname = parsedUrl.hostname;
 
     // Remove "www." if it exists
     if (hostname.startsWith('www.')) {
       hostname = hostname.substring(4);
+    }
+
+    if (allowlistModeEnabled) {
+      if (!allowlistedDomains.includes(hostname)) {
+        console.log(`Allowlist mode: ${hostname} not in allowlist. Not logging.`);
+        return; // Do not log if not in allowlist
+      }
+      console.log(`Allowlist mode: ${hostname} is in allowlist. Logging.`);
     }
 
     const logEntry = {

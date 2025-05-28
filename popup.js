@@ -3,6 +3,8 @@ console.log('Popup script loaded.');
 
 // Defined to match background.js for consistency, though not strictly necessary to redefine here
 const LOGS_STORAGE_KEY = 'websiteTrackerLogs';
+const ALLOWLIST_MODE_KEY = 'allowlistModeEnabled';
+const ALLOWLIST_DOMAINS_KEY = 'allowlistDomains';
 
 function updateLogSummary() {
   const totalElement = document.getElementById('logSummaryTotal');
@@ -53,12 +55,77 @@ function updateLogSummary() {
   });
 }
 
+function loadSettings() {
+  const enableAllowlistModeCheckbox = document.getElementById('enableAllowlistMode');
+  const allowlistDomainsTextarea = document.getElementById('allowlistDomains');
+  const settingsStatusMessage = document.getElementById('settingsStatusMessage');
+
+  if (!enableAllowlistModeCheckbox || !allowlistDomainsTextarea) {
+    console.error('Settings UI elements not found.');
+    if (settingsStatusMessage) settingsStatusMessage.textContent = 'Error: Could not load settings UI.';
+    return;
+  }
+
+  chrome.storage.local.get([ALLOWLIST_MODE_KEY, ALLOWLIST_DOMAINS_KEY], (result) => {
+    if (chrome.runtime.lastError) {
+      console.error('Error loading settings:', chrome.runtime.lastError.message);
+      if (settingsStatusMessage) settingsStatusMessage.textContent = 'Error loading settings.';
+      return;
+    }
+    enableAllowlistModeCheckbox.checked = !!result[ALLOWLIST_MODE_KEY];
+    allowlistDomainsTextarea.value = (result[ALLOWLIST_DOMAINS_KEY] || []).join('\n');
+    if (settingsStatusMessage) settingsStatusMessage.textContent = 'Settings loaded.';
+    setTimeout(() => { if (settingsStatusMessage) settingsStatusMessage.textContent = ''; }, 2000);
+  });
+}
+
+function saveSettings() {
+  const enableAllowlistModeCheckbox = document.getElementById('enableAllowlistMode');
+  const allowlistDomainsTextarea = document.getElementById('allowlistDomains');
+  const settingsStatusMessage = document.getElementById('settingsStatusMessage');
+
+  const isEnabled = enableAllowlistModeCheckbox.checked;
+  const domains = allowlistDomainsTextarea.value.split('\n').map(d => d.trim()).filter(d => d.length > 0);
+
+  chrome.storage.local.set({
+    [ALLOWLIST_MODE_KEY]: isEnabled,
+    [ALLOWLIST_DOMAINS_KEY]: domains
+  }, () => {
+    if (chrome.runtime.lastError) {
+      console.error('Error saving settings:', chrome.runtime.lastError.message);
+      if (settingsStatusMessage) settingsStatusMessage.textContent = 'Error saving settings!';
+    } else {
+      console.log('Settings saved:', {isEnabled, domains});
+      if (settingsStatusMessage) settingsStatusMessage.textContent = 'Settings saved successfully!';
+      // Optionally, notify background script if settings changed that affect its behavior immediately.
+      // For now, background script will pick up settings on next logging attempt.
+    }
+    setTimeout(() => { if (settingsStatusMessage) settingsStatusMessage.textContent = ''; }, 2000);
+  });
+}
+
 document.addEventListener('DOMContentLoaded', () => {
   const sendButton = document.getElementById('sendApiRequestBtn');
   const statusMessageElement = document.getElementById('statusMessage');
+  const toggleSettingsBtn = document.getElementById('toggleSettingsBtn');
+  const settingsSection = document.getElementById('settingsSection');
+  const saveSettingsBtn = document.getElementById('saveSettingsBtn');
 
   // Initial load of log summary
   updateLogSummary();
+  loadSettings();
+
+  if (toggleSettingsBtn && settingsSection) {
+    toggleSettingsBtn.addEventListener('click', () => {
+      const isHidden = settingsSection.style.display === 'none' || settingsSection.style.display === '';
+      settingsSection.style.display = isHidden ? 'block' : 'none';
+      toggleSettingsBtn.textContent = isHidden ? 'Hide Settings' : 'Show Settings';
+    });
+  }
+
+  if (saveSettingsBtn) {
+    saveSettingsBtn.addEventListener('click', saveSettings);
+  }
 
   if (sendButton) {
     sendButton.addEventListener('click', () => {
@@ -95,8 +162,16 @@ document.addEventListener('DOMContentLoaded', () => {
 
 // Listen for storage changes to keep the summary up-to-date if logs are cleared by the background script
 chrome.storage.onChanged.addListener((changes, namespace) => {
-  if (namespace === 'local' && changes[LOGS_STORAGE_KEY]) {
-    console.log('Detected storage change for logs. Updating summary.');
-    updateLogSummary();
+  if (namespace === 'local') {
+    if (changes[LOGS_STORAGE_KEY]) {
+      console.log('Detected storage change for logs. Updating summary.');
+      updateLogSummary();
+    }
+    // If settings change (e.g. from another popup instance, though unlikely for simple extensions),
+    // you might want to reload settings display here too.
+    if (changes[ALLOWLIST_MODE_KEY] || changes[ALLOWLIST_DOMAINS_KEY]) {
+        console.log('Detected settings change in storage. Reloading settings display.');
+        loadSettings();
+    }
   }
 });
