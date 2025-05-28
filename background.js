@@ -6,6 +6,7 @@ const TWENTY_FOUR_HOURS_MS = 24 * 60 * 60 * 1000;
 const SEND_DATA_ALARM_NAME = 'sendDataAlarm';
 const ALLOWLIST_MODE_KEY = 'allowlistModeEnabled';
 const ALLOWLIST_DOMAINS_KEY = 'allowlistDomains';
+const LIVE_MODE_KEY = 'liveModeEnabled';
 
 // --- Helper Functions ---
 
@@ -39,14 +40,19 @@ function isSameUTCDay(ts1, ts2) {
 // --- Core Logic Functions ---
 
 /**
- * Records a website visit to local storage, respecting allowlist settings.
+ * Records a website visit, respects allowlist, and triggers send if in live mode.
  * @param {string} fullUrl - The full URL of the visited website.
  */
 async function recordWebsiteVisit(fullUrl) {
   try {
-    const settings = await chrome.storage.local.get([ALLOWLIST_MODE_KEY, ALLOWLIST_DOMAINS_KEY]);
+    const settings = await chrome.storage.local.get([
+      ALLOWLIST_MODE_KEY, 
+      ALLOWLIST_DOMAINS_KEY, 
+      LIVE_MODE_KEY
+    ]);
     const allowlistModeEnabled = !!settings[ALLOWLIST_MODE_KEY];
     const allowlistedDomains = settings[ALLOWLIST_DOMAINS_KEY] || [];
+    const liveModeEnabled = !!settings[LIVE_MODE_KEY];
 
     const parsedUrl = new URL(fullUrl);
     let hostname = parsedUrl.hostname;
@@ -58,14 +64,14 @@ async function recordWebsiteVisit(fullUrl) {
 
     if (allowlistModeEnabled) {
       if (!allowlistedDomains.includes(hostname)) {
-        console.log(`Allowlist mode: ${hostname} not in allowlist. Not logging.`);
-        return; // Do not log if not in allowlist
+        console.log(`Allowlist: ${hostname} not in list. Not logging.`);
+        return;
       }
-      console.log(`Allowlist mode: ${hostname} is in allowlist. Logging.`);
+      console.log(`Allowlist: ${hostname} is in list. Proceeding.`);
     }
 
     const logEntry = {
-      processedHostname: hostname, // Store the processed hostname
+      processedHostname: hostname,
       timestampRFC2822: getRFC2822Timestamp(),
       loggedAtMS: Date.now()
     };
@@ -75,6 +81,14 @@ async function recordWebsiteVisit(fullUrl) {
     logs.push(logEntry);
     await chrome.storage.local.set({ [LOGS_STORAGE_KEY]: logs });
     console.log('Website logged:', logEntry.processedHostname, '@', logEntry.timestampRFC2822);
+
+    if (liveModeEnabled) {
+      console.log('Live mode enabled. Triggering immediate log send attempt.');
+      // Call checkAndProcessLogs with isForced = true to send immediately.
+      // This sends *all* accumulated logs, not just the current one.
+      checkAndProcessLogs(true);
+    }
+
   } catch (error) {
     console.error('Error recording website visit for URL:', fullUrl, error);
   }
@@ -227,26 +241,32 @@ chrome.tabs.onActivated.addListener(async (activeInfo) => {
 chrome.alarms.onAlarm.addListener((alarm) => {
   if (alarm.name === SEND_DATA_ALARM_NAME) {
     console.log('Hourly alarm triggered: checking logs.');
-    checkAndProcessLogs();
+    // Don't force send from alarm if live mode might be on, as that handles its own forced sends.
+    // The alarm still serves as a fallback for other conditions if live mode is off.
+    chrome.storage.local.get(LIVE_MODE_KEY, (settings) => {
+        if (!settings[LIVE_MODE_KEY]) {
+            checkAndProcessLogs(false); // isForced = false
+        }
+    });
   }
 });
 
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (request.action === "forceSendData") {
-    console.log('forceSendData message received.');
-    checkAndProcessLogs(true)
-      .then(() => sendResponse({ status: "Data processing initiated (forced)." }))
+    console.log('forceSendData message received from popup.');
+    checkAndProcessLogs(true) // isForced = true
+      .then(() => sendResponse({ status: "Data processing initiated (forced by popup)." }))
       .catch(error => {
-        console.error("Error during forced send:", error);
+        console.error("Error during forced send from popup:", error);
         sendResponse({ status: `Error: ${error.message}`});
       });
-    return true; // Indicates that the response is sent asynchronously.
+    return true; 
   }
 });
 
 chrome.runtime.onStartup.addListener(() => {
   console.log("Extension started up. Performing initial log check.");
-  checkAndProcessLogs();
+  checkAndProcessLogs(); // isForced = false by default
 });
 
 // --- Initialization ---
@@ -254,8 +274,7 @@ chrome.runtime.onStartup.addListener(() => {
 chrome.runtime.onInstalled.addListener(() => {
   chrome.alarms.create(SEND_DATA_ALARM_NAME, { periodInMinutes: 60 });
   console.log('Hourly alarm for sending data created/verified.');
-   // Perform an initial check in case there are old logs from before an update/install
-  checkAndProcessLogs();
+  checkAndProcessLogs(); // isForced = false by default
 });
 
 console.log('Background script loaded. Logging and periodic checks are active.');

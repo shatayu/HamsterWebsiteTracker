@@ -5,6 +5,7 @@ console.log('Popup script loaded.');
 const LOGS_STORAGE_KEY = 'websiteTrackerLogs';
 const ALLOWLIST_MODE_KEY = 'allowlistModeEnabled';
 const ALLOWLIST_DOMAINS_KEY = 'allowlistDomains';
+const LIVE_MODE_KEY = 'liveModeEnabled';
 
 function updateLogSummary() {
   const totalElement = document.getElementById('logSummaryTotal');
@@ -58,15 +59,16 @@ function updateLogSummary() {
 function loadSettings() {
   const enableAllowlistModeCheckbox = document.getElementById('enableAllowlistMode');
   const allowlistDomainsTextarea = document.getElementById('allowlistDomains');
+  const enableLiveModeCheckbox = document.getElementById('enableLiveMode');
   const settingsStatusMessage = document.getElementById('settingsStatusMessage');
 
-  if (!enableAllowlistModeCheckbox || !allowlistDomainsTextarea) {
+  if (!enableAllowlistModeCheckbox || !allowlistDomainsTextarea || !enableLiveModeCheckbox) {
     console.error('Settings UI elements not found.');
     if (settingsStatusMessage) settingsStatusMessage.textContent = 'Error: Could not load settings UI.';
     return;
   }
 
-  chrome.storage.local.get([ALLOWLIST_MODE_KEY, ALLOWLIST_DOMAINS_KEY], (result) => {
+  chrome.storage.local.get([ALLOWLIST_MODE_KEY, ALLOWLIST_DOMAINS_KEY, LIVE_MODE_KEY], (result) => {
     if (chrome.runtime.lastError) {
       console.error('Error loading settings:', chrome.runtime.lastError.message);
       if (settingsStatusMessage) settingsStatusMessage.textContent = 'Error loading settings.';
@@ -74,6 +76,7 @@ function loadSettings() {
     }
     enableAllowlistModeCheckbox.checked = !!result[ALLOWLIST_MODE_KEY];
     allowlistDomainsTextarea.value = (result[ALLOWLIST_DOMAINS_KEY] || []).join('\n');
+    enableLiveModeCheckbox.checked = !!result[LIVE_MODE_KEY];
     if (settingsStatusMessage) settingsStatusMessage.textContent = 'Settings loaded.';
     setTimeout(() => { if (settingsStatusMessage) settingsStatusMessage.textContent = ''; }, 2000);
   });
@@ -82,20 +85,23 @@ function loadSettings() {
 function saveSettings() {
   const enableAllowlistModeCheckbox = document.getElementById('enableAllowlistMode');
   const allowlistDomainsTextarea = document.getElementById('allowlistDomains');
+  const enableLiveModeCheckbox = document.getElementById('enableLiveMode');
   const settingsStatusMessage = document.getElementById('settingsStatusMessage');
 
-  const isEnabled = enableAllowlistModeCheckbox.checked;
+  const isAllowlistEnabled = enableAllowlistModeCheckbox.checked;
   const domains = allowlistDomainsTextarea.value.split('\n').map(d => d.trim()).filter(d => d.length > 0);
+  const isLiveModeEnabled = enableLiveModeCheckbox.checked;
 
   chrome.storage.local.set({
-    [ALLOWLIST_MODE_KEY]: isEnabled,
-    [ALLOWLIST_DOMAINS_KEY]: domains
+    [ALLOWLIST_MODE_KEY]: isAllowlistEnabled,
+    [ALLOWLIST_DOMAINS_KEY]: domains,
+    [LIVE_MODE_KEY]: isLiveModeEnabled
   }, () => {
     if (chrome.runtime.lastError) {
       console.error('Error saving settings:', chrome.runtime.lastError.message);
       if (settingsStatusMessage) settingsStatusMessage.textContent = 'Error saving settings!';
     } else {
-      console.log('Settings saved:', {isEnabled, domains});
+      console.log('Settings saved:', {isAllowlistEnabled, domains, isLiveModeEnabled});
       if (settingsStatusMessage) settingsStatusMessage.textContent = 'Settings saved successfully!';
       // Optionally, notify background script if settings changed that affect its behavior immediately.
       // For now, background script will pick up settings on next logging attempt.
@@ -169,7 +175,7 @@ chrome.storage.onChanged.addListener((changes, namespace) => {
     }
     // If settings change (e.g. from another popup instance, though unlikely for simple extensions),
     // you might want to reload settings display here too.
-    if (changes[ALLOWLIST_MODE_KEY] || changes[ALLOWLIST_DOMAINS_KEY]) {
+    if (changes[ALLOWLIST_MODE_KEY] || changes[ALLOWLIST_DOMAINS_KEY] || changes[LIVE_MODE_KEY]) {
         console.log('Detected settings change in storage. Reloading settings display.');
         loadSettings();
     }

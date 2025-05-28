@@ -13,8 +13,8 @@
     #logSummaryBreakdown ul { list-style-type: none; padding-left: 0; margin-top: 5px; }
     #logSummaryBreakdown li { margin-bottom: 3px; }
     .settings-section { border-top: 1px solid #ccc; margin-top: 15px; padding-top: 10px; display: none; }
+    .settings-section .setting-item { margin-bottom: 10px; }
     .settings-section label {
-      display: block;
       margin-bottom: 5px;
       font-weight: bold;
     }
@@ -46,12 +46,17 @@
 
   <div class="settings-section" id="settingsSection">
     <h4>Settings</h4>
-    <div>
+    <div class="setting-item">
+      <label for="enableLiveMode">
+        <input type="checkbox" id="enableLiveMode"> Enable Live Mode (send data on each visit)
+      </label>
+    </div>
+    <div class="setting-item">
       <label for="enableAllowlistMode">
         <input type="checkbox" id="enableAllowlistMode"> Enable Allowlist Mode
       </label>
     </div>
-    <div>
+    <div class="setting-item">
       <label for="allowlistDomains">Allowlisted Domains (one per line):</label>
       <textarea id="allowlistDomains" placeholder="e.g., google.com\nx.com\ntheatlantic.com"></textarea>
     </div>
