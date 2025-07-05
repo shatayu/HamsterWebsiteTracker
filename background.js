@@ -7,8 +7,42 @@ const SEND_DATA_ALARM_NAME = 'sendDataAlarm';
 const ALLOWLIST_MODE_KEY = 'allowlistModeEnabled';
 const ALLOWLIST_DOMAINS_KEY = 'allowlistDomains';
 const LIVE_MODE_KEY = 'liveModeEnabled';
+const LAST_VISITED_DOMAIN_KEY = 'lastVisitedDomain';
 
 // --- Helper Functions ---
+
+/**
+ * Extracts the top-level domain from a hostname.
+ * Examples: 
+ * - "reddit.com" -> "reddit.com"
+ * - "www.reddit.com" -> "reddit.com"
+ * - "old.reddit.com" -> "reddit.com"
+ * - "subdomain.example.co.uk" -> "example.co.uk"
+ * @param {string} hostname - The hostname to extract top-level domain from.
+ * @returns {string} The top-level domain.
+ */
+function getTopLevelDomain(hostname) {
+  // Remove "www." if it exists
+  if (hostname.startsWith('www.')) {
+    hostname = hostname.substring(4);
+  }
+  
+  // Split by dots and get the last two parts for most domains
+  const parts = hostname.split('.');
+  
+  // Handle special cases like .co.uk, .com.au, etc.
+  if (parts.length >= 3) {
+    const lastTwo = parts.slice(-2).join('.');
+    // Check if it's a known multi-part TLD
+    const multiPartTLDs = ['co.uk', 'com.au', 'co.nz', 'co.za', 'com.br', 'com.mx', 'org.uk', 'net.uk', 'gov.uk'];
+    if (multiPartTLDs.some(tld => lastTwo.endsWith(tld))) {
+      return parts.slice(-3).join('.');
+    }
+  }
+  
+  // For most domains, return the last two parts
+  return parts.slice(-2).join('.');
+}
 
 /**
  * Generates a timestamp string in a format compatible with RFC 2822 (approximated).
@@ -41,6 +75,7 @@ function isSameUTCDay(ts1, ts2) {
 
 /**
  * Records a website visit, respects allowlist, and triggers send if in live mode.
+ * Only logs if the top-level domain is different from the previous visit.
  * @param {string} fullUrl - The full URL of the visited website.
  */
 async function recordWebsiteVisit(fullUrl) {
@@ -48,11 +83,13 @@ async function recordWebsiteVisit(fullUrl) {
     const settings = await chrome.storage.local.get([
       ALLOWLIST_MODE_KEY, 
       ALLOWLIST_DOMAINS_KEY, 
-      LIVE_MODE_KEY
+      LIVE_MODE_KEY,
+      LAST_VISITED_DOMAIN_KEY
     ]);
     const allowlistModeEnabled = !!settings[ALLOWLIST_MODE_KEY];
     const allowlistedDomains = settings[ALLOWLIST_DOMAINS_KEY] || [];
     const liveModeEnabled = !!settings[LIVE_MODE_KEY];
+    const lastVisitedDomain = settings[LAST_VISITED_DOMAIN_KEY] || null;
 
     const parsedUrl = new URL(fullUrl);
     let hostname = parsedUrl.hostname;
@@ -60,6 +97,15 @@ async function recordWebsiteVisit(fullUrl) {
     // Remove "www." if it exists
     if (hostname.startsWith('www.')) {
       hostname = hostname.substring(4);
+    }
+
+    // Get the top-level domain for comparison
+    const currentTopLevelDomain = getTopLevelDomain(hostname);
+    
+    // Check if this is the same top-level domain as the last visit
+    if (lastVisitedDomain === currentTopLevelDomain) {
+      console.log(`Same top-level domain as last visit (${currentTopLevelDomain}). Not logging.`);
+      return;
     }
 
     if (allowlistModeEnabled) {
@@ -79,8 +125,15 @@ async function recordWebsiteVisit(fullUrl) {
     const data = await chrome.storage.local.get(LOGS_STORAGE_KEY);
     const logs = data[LOGS_STORAGE_KEY] || [];
     logs.push(logEntry);
-    await chrome.storage.local.set({ [LOGS_STORAGE_KEY]: logs });
+    
+    // Update both the logs and the last visited domain
+    await chrome.storage.local.set({ 
+      [LOGS_STORAGE_KEY]: logs,
+      [LAST_VISITED_DOMAIN_KEY]: currentTopLevelDomain
+    });
+    
     console.log('Website logged:', logEntry.processedHostname, '@', logEntry.timestampRFC2822);
+    console.log('Updated last visited domain to:', currentTopLevelDomain);
 
     if (liveModeEnabled) {
       console.log('Live mode enabled. Triggering immediate log send attempt.');
