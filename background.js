@@ -111,6 +111,9 @@ async function recordWebsiteVisit(fullUrl) {
     if (allowlistModeEnabled) {
       if (!allowlistedDomains.includes(hostname)) {
         console.log(`Allowlist: ${hostname} not in list. Not logging.`);
+        // Still update the last visited domain even for non-allowlisted sites
+        await chrome.storage.local.set({ [LAST_VISITED_DOMAIN_KEY]: currentTopLevelDomain });
+        console.log('Updated last visited domain to:', currentTopLevelDomain, '(non-allowlisted)');
         return;
       }
       console.log(`Allowlist: ${hostname} is in list. Proceeding.`);
