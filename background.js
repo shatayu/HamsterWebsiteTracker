@@ -45,15 +45,32 @@ function getTopLevelDomain(hostname) {
 }
 
 /**
- * Generates a timestamp string in a format compatible with RFC 2822 (approximated).
- * Example: "Sat, 13 Jul 2024 15:30:00 +0000"
+ * Generates a timestamp string in ISO 8601 format with timezone.
+ * Example: "2025-09-11T20:44:27-04:00"
  * @param {Date} date - The date object to format. Defaults to now.
- * @returns {string} Formatted date string.
+ * @returns {string} Formatted date string with timezone.
  */
-function getRFC2822Timestamp(date = new Date()) {
-  // toUTCString() returns "Sat, 13 Jul 2024 15:30:00 GMT"
-  // RFC 2822 requires the offset as +0000 or -0000 for UTC.
-  return date.toUTCString().replace('GMT', '+0000');
+function getTimestampWithTimezone(date = new Date()) {
+  // Get the timezone offset in minutes
+  const timezoneOffset = date.getTimezoneOffset();
+  const offsetHours = Math.floor(Math.abs(timezoneOffset) / 60);
+  const offsetMinutes = Math.abs(timezoneOffset) % 60;
+  const offsetSign = timezoneOffset <= 0 ? '+' : '-';
+  const offsetString = `${offsetSign}${offsetHours.toString().padStart(2, '0')}:${offsetMinutes.toString().padStart(2, '0')}`;
+  
+  // Get ISO string and replace Z with timezone offset
+  const isoString = date.toISOString();
+  const localDateTime = isoString.slice(0, 19); // Remove the Z
+  
+  // Create local time with proper timezone offset
+  const year = date.getFullYear();
+  const month = (date.getMonth() + 1).toString().padStart(2, '0');
+  const day = date.getDate().toString().padStart(2, '0');
+  const hours = date.getHours().toString().padStart(2, '0');
+  const minutes = date.getMinutes().toString().padStart(2, '0');
+  const seconds = date.getSeconds().toString().padStart(2, '0');
+  
+  return `${year}-${month}-${day}T${hours}:${minutes}:${seconds}${offsetString}`;
 }
 
 /**
@@ -121,7 +138,7 @@ async function recordWebsiteVisit(fullUrl) {
 
     const logEntry = {
       processedHostname: hostname,
-      timestampRFC2822: getRFC2822Timestamp(),
+      timestampWithTimezone: getTimestampWithTimezone(),
       loggedAtMS: Date.now()
     };
 
@@ -135,7 +152,7 @@ async function recordWebsiteVisit(fullUrl) {
       [LAST_VISITED_DOMAIN_KEY]: currentTopLevelDomain
     });
     
-    console.log('Website logged:', logEntry.processedHostname, '@', logEntry.timestampRFC2822);
+    console.log('Website logged:', logEntry.processedHostname, '@', logEntry.timestampWithTimezone);
     console.log('Updated last visited domain to:', currentTopLevelDomain);
 
     if (liveModeEnabled) {
@@ -158,7 +175,7 @@ async function recordWebsiteVisit(fullUrl) {
 function compileLogData(logs) {
   if (!logs || logs.length === 0) return "";
   return logs
-    .map(log => `opening ${log.processedHostname} at ${log.timestampRFC2822}`) // Use processedHostname
+    .map(log => log.timestampWithTimezone) // Just the timestamp
     .join('\n')
     .trim();
 }
@@ -166,39 +183,62 @@ function compileLogData(logs) {
 /**
  * Sends the compiled data string to the API.
  * @param {string} dataString - The compiled string of log data.
+ * @param {Array<Object>} logs - Array of log entries to determine domains for event names.
  * @returns {Promise<boolean>} True if the API request was successful, false otherwise.
  */
-async function performApiSend(dataString) {
-  if (!dataString) {
-    console.log("No data string to send to API.");
+async function performApiSend(dataString, logs) {
+  if (!dataString || !logs || logs.length === 0) {
+    console.log("No data string or logs to send to API.");
     return true; // No data means nothing to fail on
   }
 
-  const requestBody = {
-    username: "premelon",
-    eventName: "personalLaptopUse",
-    data: dataString
-  };
-
-  console.log('Sending API request. Data length:', dataString.length);
-  try {
-    const response = await fetch(API_ENDPOINT, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(requestBody)
-    });
-
-    const responseText = await response.text();
-    if (!response.ok) {
-      console.error(`API request failed: ${response.status} - ${responseText}`);
-      return false;
+  // Group logs by domain and send separate API calls for each domain
+  const logsByDomain = {};
+  logs.forEach(log => {
+    const domain = log.processedHostname;
+    if (!logsByDomain[domain]) {
+      logsByDomain[domain] = [];
     }
-    console.log('API request successful:', responseText);
-    return true;
-  } catch (error) {
-    console.error('Error sending data to API:', error);
-    return false;
+    logsByDomain[domain].push(log);
+  });
+
+  let allSuccessful = true;
+  
+  for (const [domain, domainLogs] of Object.entries(logsByDomain)) {
+    const domainDataString = domainLogs
+      .map(log => log.timestampWithTimezone)
+      .join('\n')
+      .trim();
+      
+    const requestBody = {
+      username: "premelon",
+      eventName: `personalLaptopUse:${domain}`,
+      data: domainDataString
+    };
+
+    console.log(`Sending API request for domain: ${domain}. Data length:`, domainDataString.length);
+    try {
+      const response = await fetch(API_ENDPOINT, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(requestBody)
+      });
+
+      const responseText = await response.text();
+      if (!response.ok) {
+        console.error(`API request failed for ${domain}: ${response.status} - ${responseText}`);
+        allSuccessful = false;
+      } else {
+        console.log(`API request successful for ${domain}:`, responseText);
+      }
+    } catch (error) {
+      console.error(`Error sending data to API for ${domain}:`, error);
+      allSuccessful = false;
+    }
   }
+  
+  return allSuccessful;
+
 }
 
 /**
@@ -252,7 +292,7 @@ async function checkAndProcessLogs(isForced = false) {
     if (isForced || moreThan24Hours || differentUTCDay) {
       console.log('Conditions met or forced. Preparing to send logs.');
       const dataString = compileLogData(logs);
-      const success = await performApiSend(dataString);
+      const success = await performApiSend(dataString, logs);
 
       if (success) {
         await clearAllLogs();
